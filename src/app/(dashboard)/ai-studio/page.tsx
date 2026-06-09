@@ -117,7 +117,7 @@ export default function AIStudioPage() {
   const [error, setError] = useState("");
   const [resume, setResume] = useState<Resume | null>(null);
   const [provider, setProvider] = useState<"opencodeZen" | "nvidia">("nvidia");
-  const [selectedModel, setSelectedModel] = useState("nvidia/llama-3.1-nemotron-ultra-instruct");
+  const [selectedModel, setSelectedModel] = useState("meta/llama-3.1-8b-instruct");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
@@ -130,7 +130,7 @@ export default function AIStudioPage() {
 
   useEffect(() => {
     if (provider === "nvidia") {
-      setSelectedModel("nvidia/llama-3.1-nemotron-ultra-instruct");
+      setSelectedModel("meta/llama-3.1-8b-instruct");
     } else {
       setSelectedModel("gpt-4o-mini");
     }
@@ -378,7 +378,7 @@ export default function AIStudioPage() {
                     <div className="w-3 h-3 rounded-full bg-accent-tertiary" />
                     <span className="font-semibold">NVIDIA NIMs</span>
                   </div>
-                  <div className="text-xs text-text-secondary">15 Free Models</div>
+                  <div className="text-xs text-text-secondary">{NVIDIA_FREE_MODELS.length} Models</div>
                 </button>
                 <button
                   type="button"
@@ -555,28 +555,28 @@ export default function AIStudioPage() {
               {provider === "nvidia" ? (
                 <>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">🧠</span>
-                    <span>Reasoning & Coding</span>
+                    <span className="text-lg">🎯</span>
+                    <span>Reasoning & Writing</span>
                   </div>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">📝</span>
-                    <span>Text Generation</span>
+                    <span className="text-lg">🧠</span>
+                    <span>Meta Llama</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
+                    <span className="text-lg">🔬</span>
+                    <span>Google</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
+                    <span className="text-lg">💻</span>
+                    <span>Mistral</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
+                    <span className="text-lg">⚡</span>
+                    <span>Microsoft</span>
                   </div>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
                     <span className="text-lg">👁️</span>
-                    <span>Vision (VLM)</span>
-                  </div>
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">🔢</span>
-                    <span>Code Generation</span>
-                  </div>
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">🚀</span>
-                    <span>Small & Fast</span>
-                  </div>
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">🔍</span>
-                    <span>Embeddings & RAG</span>
+                    <span>Vision Models</span>
                   </div>
                 </>
               ) : (
