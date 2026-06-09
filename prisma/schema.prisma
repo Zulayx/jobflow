@@ -19,6 +19,9 @@ model User {
   nvidiaApiKey      String?
   opencodeZenApiKey String?
   apiKeysUpdatedAt  DateTime?
+  gmailRefreshToken String?
+  gmailEmail        String?
+  lastGmailSync     DateTime?
   createdAt         DateTime      @default(now())
   applications    Application[]
   resume          Resume?
@@ -37,9 +40,13 @@ model Application {
   notes          String?
   jobDescription String?
   tags           String?
+  source         String?
+  sourceId       String?
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   timeline  TimelineEntry[]
+
+  @@index([userId, sourceId])
 }
 
 model TimelineEntry {

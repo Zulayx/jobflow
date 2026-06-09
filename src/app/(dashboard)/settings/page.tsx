@@ -28,10 +28,72 @@ export default function SettingsPage() {
   const [linkedinSuccess, setLinkedinSuccess] = useState(false);
   const [linkedinError, setLinkedinError] = useState("");
 
+  const [gmailConnected, setGmailConnected] = useState(false);
+  const [gmailEmail, setGmailEmail] = useState<string | null>(null);
+  const [gmailConfigured, setGmailConfigured] = useState(true);
+  const [lastGmailSync, setLastGmailSync] = useState<string | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState("");
+  const [gmailNotice, setGmailNotice] = useState("");
+
   useEffect(() => {
     fetchLinkedinProfile();
     fetchApiKeyStatus();
+    fetchGmailStatus();
+
+    // Surface the result of the OAuth round-trip (?gmail=connected|error).
+    const params = new URLSearchParams(window.location.search);
+    const g = params.get("gmail");
+    if (g === "connected") setGmailNotice("Gmail connected! Click 'Sync now' to import your LinkedIn applications.");
+    else if (g === "error") setGmailNotice("Gmail connection failed. Please try again.");
+    else if (g === "norefresh") setGmailNotice("Gmail connected but no refresh token was returned. Remove access at myaccount.google.com and reconnect.");
+    if (g) window.history.replaceState({}, "", "/settings");
   }, []);
+
+  const fetchGmailStatus = async () => {
+    try {
+      const res = await fetch("/api/gmail");
+      if (res.ok) {
+        const data = await res.json();
+        setGmailConnected(data.connected);
+        setGmailEmail(data.gmailEmail);
+        setLastGmailSync(data.lastGmailSync);
+        setGmailConfigured(data.configured);
+      }
+    } catch {
+      console.error("Failed to fetch Gmail status");
+    }
+  };
+
+  const handleDisconnectGmail = async () => {
+    await fetch("/api/gmail", { method: "DELETE" });
+    setGmailConnected(false);
+    setGmailEmail(null);
+    setSyncMessage("");
+  };
+
+  const handleSyncLinkedIn = async () => {
+    setIsSyncing(true);
+    setSyncMessage("");
+    try {
+      const res = await fetch("/api/linkedin/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncMessage(
+          data.imported > 0
+            ? `Imported ${data.imported} new application${data.imported === 1 ? "" : "s"} (scanned ${data.scanned} emails).`
+            : `No new applications found (scanned ${data.scanned} emails).`
+        );
+        setLastGmailSync(new Date().toISOString());
+      } else {
+        setSyncMessage(data.error || "Sync failed.");
+      }
+    } catch {
+      setSyncMessage("Sync failed. Please try again.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
   const fetchLinkedinProfile = async () => {
     try {
@@ -307,6 +369,97 @@ export default function SettingsPage() {
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Auto-tracking via Gmail */}
+        <div className="glass-card p-6">
+          <div className="flex items-center justify-between mb-2">
+            <div>
+              <h2 className="text-xl font-semibold">Auto-Track Applications</h2>
+              <p className="text-text-secondary text-sm mt-1">
+                Connect Gmail to automatically import jobs you applied to on LinkedIn
+              </p>
+            </div>
+            <div className="w-12 h-12 rounded-xl bg-[#EA4335]/15 flex items-center justify-center">
+              <svg className="w-6 h-6 text-[#EA4335]" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M24 5.457v13.909c0 .904-.732 1.636-1.636 1.636h-1.909V10.91L12 16.5 3.545 10.91v10.092H1.636A1.636 1.636 0 0 1 0 19.366V5.457c0-.9.732-1.636 1.636-1.636h.41L12 10.09l9.954-6.269h.41c.904 0 1.636.732 1.636 1.636z"/>
+              </svg>
+            </div>
+          </div>
+
+          <div className="p-3 mb-5 rounded-xl bg-accent-primary/5 border border-accent-primary/15 text-xs text-text-tertiary">
+            Reads only LinkedIn &ldquo;application sent&rdquo; emails — never your other mail, and never touches your LinkedIn account directly.
+          </div>
+
+          {gmailNotice && (
+            <div className="mb-4 p-4 rounded-xl bg-accent-primary/10 border border-accent-primary/20 text-accent-primary text-sm">
+              {gmailNotice}
+            </div>
+          )}
+
+          {!gmailConfigured ? (
+            <div className="p-4 rounded-xl bg-warning/10 border border-warning/20 text-sm text-text-secondary">
+              Gmail integration isn&rsquo;t configured yet. Add <code className="text-accent-primary">GOOGLE_CLIENT_ID</code> and{" "}
+              <code className="text-accent-primary">GOOGLE_CLIENT_SECRET</code> to enable it.
+            </div>
+          ) : gmailConnected ? (
+            <div className="space-y-4">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-success/10 border border-success/20">
+                <div className="flex items-center gap-2 text-success text-sm min-w-0">
+                  <svg className="w-4 h-4 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                  <span className="truncate">Connected{gmailEmail ? ` · ${gmailEmail}` : ""}</span>
+                </div>
+                <button onClick={handleDisconnectGmail} className="text-xs text-error hover:underline flex-shrink-0 ml-3">
+                  Disconnect
+                </button>
+              </div>
+
+              <button
+                onClick={handleSyncLinkedIn}
+                disabled={isSyncing}
+                className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-50"
+              >
+                {isSyncing ? (
+                  <>
+                    <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                    Scanning your inbox...
+                  </>
+                ) : (
+                  "Sync now"
+                )}
+              </button>
+
+              {lastGmailSync && (
+                <p className="text-xs text-text-tertiary text-center">
+                  Last synced {new Date(lastGmailSync).toLocaleString(undefined, { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
+                </p>
+              )}
+
+              {syncMessage && (
+                <div className="p-3 rounded-xl bg-white/5 border border-glass-border text-sm text-text-secondary">
+                  {syncMessage}
+                </div>
+              )}
+            </div>
+          ) : (
+            <a
+              href="/api/gmail/connect"
+              className="btn-secondary w-full flex items-center justify-center gap-3"
+            >
+              <svg className="w-5 h-5" viewBox="0 0 24 24">
+                <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" />
+                <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" />
+              </svg>
+              Connect Gmail
+            </a>
+          )}
         </div>
 
         <div className="glass-card p-6">
