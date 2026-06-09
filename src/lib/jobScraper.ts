@@ -118,6 +118,45 @@ async function fetchReadableText(targetUrl: string): Promise<string> {
   );
 }
 
+// Fast path: LinkedIn's public guest endpoint returns the job posting HTML by
+// id without authentication — much quicker and far less rate-limited than
+// rendering the full page through the reader.
+async function fetchLinkedInGuestPosting(jobId: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://www.linkedin.com/jobs-guest/jobs/api/jobPosting/${jobId}`, {
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+        Accept: "text/html",
+      },
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return null;
+    const html = await res.text();
+    const desc = html.match(/show-more-less-html__markup[^>]*>([\s\S]*?)<\/div>/i);
+    if (!desc) return null;
+    const title = html.match(/top-card-layout__title[^>]*>([^<]+)/i)?.[1]?.trim();
+    const company = html.match(/topcard__org-name-link[^>]*>([^<]+)/i)?.[1]?.trim();
+    const text = desc[1]
+      .replace(/<br\s*\/?>/gi, "\n")
+      .replace(/<\/(p|li|ul|ol|div|h\d)>/gi, "\n")
+      .replace(/<li[^>]*>/gi, "- ")
+      .replace(/<[^>]+>/g, "")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&(?:nbsp|#160);/g, " ")
+      .replace(/&#?\w+;/g, " ")
+      .replace(/[ \t]+\n/g, "\n")
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    if (text.length < 150 || looksLikeErrorPage(text)) return null;
+    const header = [title, company].filter(Boolean).join(" at ");
+    return (header ? `${header}\n\n${text}` : text).slice(0, 8000);
+  } catch {
+    return null;
+  }
+}
+
 // Pull the job-description body out of the readable markdown, dropping the
 // LinkedIn chrome (nav, "people also viewed", footer) so the model focuses on
 // the posting itself.
@@ -152,6 +191,11 @@ export async function resolveJobInput(input: string): Promise<ResolvedJob> {
     const resolvedUrl = jobId
       ? `https://www.linkedin.com/jobs/view/${jobId}`
       : raw;
+    // Try the fast guest endpoint first; fall back to the reader if blocked.
+    if (jobId) {
+      const guest = await fetchLinkedInGuestPosting(jobId);
+      if (guest) return { text: guest, source: "linkedin", jobId, resolvedUrl };
+    }
     let rateLimited = false;
     try {
       const text = await fetchReadableText(resolvedUrl);

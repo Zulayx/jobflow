@@ -348,6 +348,9 @@ export async function callAI(
       "Content-Type": "application/json",
       Authorization: `Bearer ${provider.apiKey}`,
     },
+    // Bounded so a hung provider fails with a clear error instead of letting
+    // the platform kill the whole function.
+    signal: AbortSignal.timeout(120000),
     body: JSON.stringify({
       model,
       messages,
