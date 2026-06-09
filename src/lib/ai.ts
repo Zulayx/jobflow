@@ -321,6 +321,20 @@ export const OPENCODE_ZEN_MODELS: AIModel[] = [
 
 export type ProviderType = keyof typeof AI_PROVIDERS;
 
+// The "best" model auto-selection picks per provider. Balanced for quality and
+// speed so requests finish within the serverless time limit.
+export const BEST_MODELS: Record<ProviderType, string> = {
+  nvidia: "nvidia/llama-3.3-nemotron-super-49b-v1",
+  opencodeZen: "gpt-4o",
+};
+
+// Resolve a model id, mapping the special "auto" value to the best available
+// model for the provider. Falls back to the provider default if unknown.
+export function resolveModelId(provider: ProviderType, modelId?: string): string {
+  if (!modelId || modelId === "auto") return BEST_MODELS[provider] || AI_PROVIDERS[provider].model;
+  return modelId;
+}
+
 export async function callAI(
   provider: AIProvider,
   messages: Array<{ role: string; content: string }>,
@@ -479,7 +493,13 @@ export async function analyzeJobDescription(
 
   const systemPrompt = `You are an expert job market analyst. Analyze job descriptions to help candidates prepare better.
 
-Respond ONLY with valid JSON:
+CRITICAL RULES:
+1. The FULL job description text is provided to you below. You do NOT need to and CANNOT browse the web — never say you cannot access a link.
+2. Base your analysis ONLY on the actual text provided. Do NOT invent, assume, or produce a "hypothetical" / "simulated" / "example" analysis.
+3. Never ask the user to provide the job description — it is already given.
+4. If a field genuinely cannot be determined from the text, return an empty array for it rather than guessing.
+
+Respond ONLY with valid JSON (no markdown fences, no commentary before or after):
 {
   "overview": string,
   "keyRequirements": {
@@ -500,7 +520,7 @@ Respond ONLY with valid JSON:
 
   const messages = [
     { role: "system", content: systemPrompt },
-    { role: "user", content: `Analyze this job description:\n\n${jobDescription}` },
+    { role: "user", content: `Here is the complete job description text to analyze. Analyze ONLY this text:\n\n----- JOB DESCRIPTION -----\n${jobDescription}\n----- END JOB DESCRIPTION -----` },
   ];
 
   return callAI(selectedProvider, messages, modelId);

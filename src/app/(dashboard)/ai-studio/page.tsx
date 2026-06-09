@@ -6,6 +6,18 @@ import { NVIDIA_FREE_MODELS, OPENCODE_ZEN_MODELS, AIModel } from "@/lib/ai";
 
 type TabType = "tailor" | "cover" | "analyze" | "questions";
 
+// Pseudo-model shown at the top of the dropdown. Sends modelId "auto"; the
+// server resolves it to the best concrete model for the chosen provider.
+const AUTO_MODEL: AIModel = {
+  id: "auto",
+  name: "Auto — Best for the job",
+  description: "Automatically picks the strongest model for this task",
+  strengths: ["Recommended", "Balanced", "High Quality"],
+  contextLength: "Auto",
+  icon: "✨",
+  category: "Recommended",
+};
+
 function ModelCard({ model, isSelected, onSelect }: { model: AIModel; isSelected: boolean; onSelect: () => void }) {
   return (
     <button
@@ -117,7 +129,7 @@ export default function AIStudioPage() {
   const [error, setError] = useState("");
   const [resume, setResume] = useState<Resume | null>(null);
   const [provider, setProvider] = useState<"opencodeZen" | "nvidia">("nvidia");
-  const [selectedModel, setSelectedModel] = useState("nvidia/llama-3.3-nemotron-super-49b-v1");
+  const [selectedModel, setSelectedModel] = useState("auto");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
@@ -128,12 +140,10 @@ export default function AIStudioPage() {
     fetchApplications();
   }, []);
 
+  // Reset to Auto whenever the provider changes so the app always picks the
+  // best model for the newly selected provider.
   useEffect(() => {
-    if (provider === "nvidia") {
-      setSelectedModel("nvidia/llama-3.3-nemotron-super-49b-v1");
-    } else {
-      setSelectedModel("gpt-4o-mini");
-    }
+    setSelectedModel("auto");
   }, [provider]);
 
   const fetchResume = async () => {
@@ -203,9 +213,9 @@ export default function AIStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: activeTab === "tailor" ? "tailor" : activeTab === "cover" ? "cover-letter" : activeTab === "analyze" ? "analyze" : "answer-question",
-          jobDescription: activeTab !== "questions"
-            ? (jobDescription || (selectedApplication ? `Role: ${selectedApplication.position} at ${selectedApplication.company}${selectedApplication.jobUrl ? `\nJob URL: ${selectedApplication.jobUrl}` : ""}` : undefined))
-            : undefined,
+          // Pasted text wins; otherwise the server scrapes the imported job's URL.
+          jobDescription: activeTab !== "questions" ? (jobDescription || undefined) : undefined,
+          jobUrl: activeTab !== "questions" && !jobDescription ? (selectedApplication?.jobUrl || undefined) : undefined,
           companyName: activeTab === "cover" ? companyName : undefined,
           position: activeTab === "cover" ? position : undefined,
           question: activeTab === "questions" ? question : undefined,
@@ -235,8 +245,9 @@ export default function AIStudioPage() {
     { id: "questions" as const, label: "Answer Questions", icon: "M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 1.343-1.343 4-3 4-3 .77-1.162 2-2.03 2-3.772a9.823 9.823 0 00-2.09-5.063M12 15V5m0 0l-4 4m4-4l4 4" },
   ];
 
-  const currentModels = provider === "nvidia" ? NVIDIA_FREE_MODELS : OPENCODE_ZEN_MODELS;
-  const selectedModelData = currentModels.find((m) => m.id === selectedModel);
+  const providerModels = provider === "nvidia" ? NVIDIA_FREE_MODELS : OPENCODE_ZEN_MODELS;
+  const currentModels = [AUTO_MODEL, ...providerModels];
+  const selectedModelData = currentModels.find((m) => m.id === selectedModel) || AUTO_MODEL;
 
   const getModelCounts = () => {
     if (provider === "nvidia") {
@@ -636,7 +647,7 @@ export default function AIStudioPage() {
                   </div>
                   <p className="mb-2">Select a model and enter a job description</p>
                   <p className="text-xs">
-                    {currentModels.length} models available from {provider === "nvidia" ? "NVIDIA NIMs" : "Opencode Zen"}
+                    {providerModels.length} models available from {provider === "nvidia" ? "NVIDIA NIMs" : "Opencode Zen"}
                   </p>
                 </div>
               </div>
