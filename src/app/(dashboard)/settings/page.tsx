@@ -161,7 +161,7 @@ export default function SettingsPage() {
               <div className="text-text-secondary">{session?.user?.email}</div>
             </div>
           </div>
-          <ProfileEditForm userName={session?.user?.name} userEmail={session?.user?.email} />
+          <ProfileEditForm userName={session?.user?.name} />
         </div>
 
         <div className="glass-card p-6">
@@ -400,7 +400,7 @@ export default function SettingsPage() {
   );
 }
 
-function ProfileEditForm({ userName }: { userName?: string | null }) {
+function ProfileEditForm({ userName }: { userName?: string | null; userEmail?: string | null }) {
   const [name, setName] = useState(userName || "");
   const [isEditing, setIsEditing] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
