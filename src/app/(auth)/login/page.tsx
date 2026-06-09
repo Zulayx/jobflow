@@ -123,6 +123,12 @@ function LoginForm() {
             )}
           </button>
 
+          <div className="text-center">
+            <Link href="/forgot-password" className="text-sm text-accent-primary hover:underline">
+              Forgot password?
+            </Link>
+          </div>
+
           <div className="relative">
             <div className="absolute inset-0 flex items-center">
               <div className="w-full border-t border-glass-border" />
