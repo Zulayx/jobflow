@@ -97,6 +97,14 @@ function ModelDropdown({ models, selectedModel, onSelect, onClose }: {
   );
 }
 
+type Application = {
+  id: string;
+  company: string;
+  position: string;
+  jobUrl?: string | null;
+  notes?: string | null;
+};
+
 export default function AIStudioPage() {
   const [activeTab, setActiveTab] = useState<TabType>("tailor");
   const [jobDescription, setJobDescription] = useState("");
@@ -110,9 +118,13 @@ export default function AIStudioPage() {
   const [provider, setProvider] = useState<"opencodeZen" | "nvidia">("nvidia");
   const [selectedModel, setSelectedModel] = useState("nvidia/llama-3.1-nemotron-ultra-instruct");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
+  const [applications, setApplications] = useState<Application[]>([]);
+  const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
+  const [showAppDropdown, setShowAppDropdown] = useState(false);
 
   useEffect(() => {
     fetchResume();
+    fetchApplications();
   }, []);
 
   useEffect(() => {
@@ -135,14 +147,42 @@ export default function AIStudioPage() {
     }
   };
 
+  const fetchApplications = async () => {
+    try {
+      const response = await fetch("/api/applications");
+      if (response.ok) {
+        const data = await response.json();
+        setApplications(data);
+      }
+    } catch (error) {
+      console.error("Failed to fetch applications:", error);
+    }
+  };
+
+  const handleSelectApplication = (app: Application) => {
+    setSelectedApplication(app);
+    setCompanyName(app.company);
+    setPosition(app.position);
+    // Pre-fill notes as job description if available
+    if (app.notes) setJobDescription(app.notes);
+    setShowAppDropdown(false);
+  };
+
+  const handleClearApplication = () => {
+    setSelectedApplication(null);
+    setCompanyName("");
+    setPosition("");
+    setJobDescription("");
+  };
+
   const handleAIRequest = async () => {
     if (activeTab === "questions") {
       if (!question) {
         setError("Please enter a question to answer");
         return;
       }
-    } else if (!jobDescription) {
-      setError("Please enter a job description");
+    } else if (!jobDescription && !selectedApplication) {
+      setError("Please enter a job description or select an imported job");
       return;
     }
 
@@ -162,7 +202,9 @@ export default function AIStudioPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           action: activeTab === "tailor" ? "tailor" : activeTab === "cover" ? "cover-letter" : activeTab === "analyze" ? "analyze" : "answer-question",
-          jobDescription: activeTab !== "questions" ? jobDescription : undefined,
+          jobDescription: activeTab !== "questions"
+            ? (jobDescription || (selectedApplication ? `Role: ${selectedApplication.position} at ${selectedApplication.company}${selectedApplication.jobUrl ? `\nJob URL: ${selectedApplication.jobUrl}` : ""}` : undefined))
+            : undefined,
           companyName: activeTab === "cover" ? companyName : undefined,
           position: activeTab === "cover" ? position : undefined,
           question: activeTab === "questions" ? question : undefined,
@@ -263,6 +305,59 @@ export default function AIStudioPage() {
                 <div className="text-text-secondary text-sm">
                   {resume.fileName || "Custom resume data saved"}
                 </div>
+              </div>
+            )}
+
+            {applications.length > 0 && activeTab !== "questions" && (
+              <div className="mb-4">
+                <label className="block text-sm font-medium mb-2">Use Imported Job (optional)</label>
+                {selectedApplication ? (
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-accent-primary/10 border border-accent-primary/30">
+                    <div className="min-w-0">
+                      <div className="font-medium text-sm truncate">{selectedApplication.position}</div>
+                      <div className="text-xs text-text-secondary truncate">{selectedApplication.company}</div>
+                    </div>
+                    <button
+                      onClick={handleClearApplication}
+                      className="ml-3 text-text-tertiary hover:text-white transition-colors flex-shrink-0"
+                      title="Clear selection"
+                    >
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                    </button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowAppDropdown(!showAppDropdown)}
+                      className="w-full input-field flex items-center justify-between text-left"
+                    >
+                      <span className="text-text-tertiary">Select from your applications...</span>
+                      <svg
+                        className={`w-4 h-4 flex-shrink-0 transition-transform ${showAppDropdown ? "rotate-180" : ""}`}
+                        fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </button>
+                    {showAppDropdown && (
+                      <div className="absolute z-10 mt-1 w-full max-h-56 overflow-y-auto bg-bg-secondary rounded-xl border border-glass-border shadow-2xl">
+                        {applications.map((app) => (
+                          <button
+                            key={app.id}
+                            onClick={() => handleSelectApplication(app)}
+                            className="w-full text-left px-4 py-3 hover:bg-white/5 transition-colors border-b border-glass-border/40 last:border-0"
+                          >
+                            <div className="font-medium text-sm">{app.position}</div>
+                            <div className="text-xs text-text-secondary">{app.company}</div>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
@@ -385,10 +480,17 @@ export default function AIStudioPage() {
 
             <div className="mb-4">
               <label className="block text-sm font-medium mb-2">
-                {activeTab === "tailor" && "Job Description (paste from job posting)"}
-                {activeTab === "cover" && "Job Description (helps personalize your letter)"}
-                {activeTab === "analyze" && "Job Description to analyze"}
                 {activeTab === "questions" && "Application Question"}
+                {activeTab !== "questions" && (
+                  <>
+                    {activeTab === "tailor" && "Job Description"}
+                    {activeTab === "cover" && "Job Description"}
+                    {activeTab === "analyze" && "Job Description"}
+                    {selectedApplication && (
+                      <span className="ml-1 text-xs font-normal text-text-tertiary">(optional — imported job selected)</span>
+                    )}
+                  </>
+                )}
               </label>
               {activeTab === "questions" ? (
                 <textarea
@@ -402,7 +504,9 @@ export default function AIStudioPage() {
                   value={jobDescription}
                   onChange={(e) => setJobDescription(e.target.value)}
                   className="input-field min-h-[200px] resize-none"
-                  placeholder={activeTab === "tailor"
+                  placeholder={selectedApplication
+                    ? `Optional: paste the full job description to improve AI accuracy...\n\nRole: ${selectedApplication.position} at ${selectedApplication.company}`
+                    : activeTab === "tailor"
                     ? "Paste the job description here to get resume tailoring suggestions..."
                     : activeTab === "cover"
                     ? "Paste the job description here to generate a personalized cover letter..."
@@ -419,7 +523,7 @@ export default function AIStudioPage() {
 
             <button
               onClick={handleAIRequest}
-              disabled={isLoading || (activeTab === "questions" ? !question : !jobDescription)}
+              disabled={isLoading || (activeTab === "questions" ? !question : (!jobDescription && !selectedApplication))}
               className="btn-primary w-full flex items-center justify-center gap-2"
             >
               {isLoading ? (
