@@ -3,8 +3,10 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { tailorResume, generateCoverLetter, analyzeJobDescription, answerApplicationQuestion, AI_PROVIDERS } from "@/lib/ai";
+import { resolveJobInput, isUrl } from "@/lib/jobScraper";
 
 export const dynamic = "force-dynamic";
+export const maxDuration = 60;
 
 export async function POST(request: NextRequest) {
   try {
@@ -50,28 +52,44 @@ export async function POST(request: NextRequest) {
 
     const resumeData = resume?.data || "No resume on file";
 
+    // If the user pasted a URL (e.g. a LinkedIn job link) instead of the
+    // description text, fetch and extract the real posting first so the model
+    // analyzes the job, not the link.
+    let resolvedJobDescription = jobDescription;
+    if (jobDescription && isUrl(jobDescription)) {
+      try {
+        const resolved = await resolveJobInput(jobDescription);
+        resolvedJobDescription = resolved.text;
+      } catch (e) {
+        return NextResponse.json(
+          { error: e instanceof Error ? e.message : "Could not read the job URL" },
+          { status: 422 }
+        );
+      }
+    }
+
     let result: string;
 
     switch (action) {
       case "tailor":
-        if (!jobDescription) {
+        if (!resolvedJobDescription) {
           return NextResponse.json({ error: "Job description required" }, { status: 400 });
         }
-        result = await tailorResume(jobDescription, resumeData, provider, apiKey, modelId);
+        result = await tailorResume(resolvedJobDescription, resumeData, provider, apiKey, modelId);
         break;
 
       case "cover-letter":
-        if (!companyName || !position || !jobDescription) {
+        if (!companyName || !position || !resolvedJobDescription) {
           return NextResponse.json({ error: "Company name, position, and job description required" }, { status: 400 });
         }
-        result = await generateCoverLetter(jobDescription, resumeData, companyName, position, provider, apiKey, modelId);
+        result = await generateCoverLetter(resolvedJobDescription, resumeData, companyName, position, provider, apiKey, modelId);
         break;
 
       case "analyze":
-        if (!jobDescription) {
+        if (!resolvedJobDescription) {
           return NextResponse.json({ error: "Job description required" }, { status: 400 });
         }
-        result = await analyzeJobDescription(jobDescription, provider, apiKey, modelId);
+        result = await analyzeJobDescription(resolvedJobDescription, provider, apiKey, modelId);
         break;
 
       case "answer-question":
