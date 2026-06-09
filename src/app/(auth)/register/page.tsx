@@ -67,7 +67,7 @@ export default function RegisterPage() {
         setError("Account created but sign in failed. Please try logging in.");
         setIsLoading(false);
       } else {
-        router.push("/applications");
+        window.location.href = "/applications";
       }
     } catch {
       setError("An error occurred. Please try again.");

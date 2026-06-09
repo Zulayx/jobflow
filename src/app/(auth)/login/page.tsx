@@ -41,7 +41,7 @@ function LoginForm() {
         }
         setIsLoading(false);
       } else {
-        router.push(callbackUrl);
+        window.location.href = callbackUrl;
       }
     } catch {
       setError("An error occurred. Please try again.");

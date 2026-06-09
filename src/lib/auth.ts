@@ -67,19 +67,24 @@ export const authOptions: NextAuthOptions = {
       if (trigger === "update" && token) {
         const updatedUser = await prisma.user.findUnique({
           where: { id: token.id as string },
-          select: { name: true },
+          select: { name: true, email: true },
         });
         if (updatedUser) {
           token.name = updatedUser.name;
+          token.email = updatedUser.email;
         }
       }
       return token;
     },
     async session({ session, token }) {
       if (session?.user) {
-        session.user.id = token.id as string;
-        session.user.name = token.name as string;
-        session.user.email = token.email as string;
+        const emailStr = ((token.email as string) || session.user.email || "") as string;
+        const nameFromToken = (token.name || token.email as string || emailStr) as string;
+        const fallbackName = emailStr.split("@")[0] || "User";
+        
+        session.user.id = (token.id as string) || session.user.id || "";
+        session.user.name = nameFromToken ? (nameFromToken.includes("@") ? fallbackName : nameFromToken) : fallbackName;
+        session.user.email = emailStr;
       }
       return session;
     },

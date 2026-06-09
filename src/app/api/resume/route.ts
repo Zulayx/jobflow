@@ -2,10 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { writeFile, mkdir } from "fs/promises";
 
 export const dynamic = "force-dynamic";
-import { join } from "path";
 
 export async function GET() {
   try {
@@ -50,26 +48,22 @@ export async function POST(request: NextRequest) {
 
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
-    const data = formData.get("data") as string | null;
+    const textData = formData.get("data") as string | null;
 
-    if (!file && !data) {
+    if (!file && !textData) {
       return NextResponse.json({ error: "No file or data provided" }, { status: 400 });
     }
 
-    let filePath: string | null = null;
     let fileName: string | null = null;
+    let filePath: string | null = null;
+    let resumeData: string | null = textData;
 
     if (file) {
       const bytes = await file.arrayBuffer();
       const buffer = Buffer.from(bytes);
-
-      const uploadDir = join(process.cwd(), "public", "uploads", user.id);
-      await mkdir(uploadDir, { recursive: true });
-
       fileName = file.name;
-      filePath = `/uploads/${user.id}/${file.name}`;
-
-      await writeFile(join(uploadDir, file.name), buffer);
+      resumeData = buffer.toString("base64");
+      filePath = null;
     }
 
     const resume = await prisma.resume.upsert({
@@ -78,12 +72,12 @@ export async function POST(request: NextRequest) {
         userId: user.id,
         fileName,
         filePath,
-        data,
+        data: resumeData,
       },
       update: {
         fileName,
         filePath,
-        data,
+        data: resumeData,
       },
     });
 
