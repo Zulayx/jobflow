@@ -47,7 +47,12 @@ export default function RegisterPage() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || "Registration failed");
+        const errorMessage = data.error || "Registration failed";
+        if (errorMessage.includes("not authorized")) {
+          setError("This email is not authorized to create an account. Please contact the administrator.");
+        } else {
+          setError(errorMessage);
+        }
         setIsLoading(false);
         return;
       }

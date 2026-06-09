@@ -31,7 +31,14 @@ function LoginForm() {
       });
 
       if (result?.error) {
-        setError("Invalid email or password");
+        const errorMessage = result.error;
+        if (errorMessage.includes("not authorized") || errorMessage.includes("Access denied")) {
+          setError("This email is not authorized to access this site");
+        } else if (errorMessage.includes("No account found")) {
+          setError("No account found with this email. Please sign up first.");
+        } else {
+          setError(errorMessage || "Invalid email or password");
+        }
         setIsLoading(false);
       } else {
         router.push(callbackUrl);

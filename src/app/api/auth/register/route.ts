@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { isEmailAllowed } from "@/lib/auth";
 
 export const dynamic = "force-dynamic";
 
@@ -15,13 +16,20 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!isEmailAllowed(email)) {
+      return NextResponse.json(
+        { error: "This email is not authorized to create an account" },
+        { status: 403 }
+      );
+    }
+
     const existingUser = await prisma.user.findUnique({
       where: { email },
     });
 
     if (existingUser) {
       return NextResponse.json(
-        { error: "An account with this email already exists" },
+        { error: "An account with this email already exists. Please sign in." },
         { status: 400 }
       );
     }
@@ -30,7 +38,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.create({
       data: {
-        name,
+        name: name || email.split("@")[0],
         email,
         password: hashedPassword,
       },
