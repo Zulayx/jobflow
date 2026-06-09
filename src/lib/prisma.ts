@@ -1,9 +1,20 @@
 import { PrismaClient } from "@prisma/client";
 
-const globalForPrisma = globalThis as unknown as {
-  prisma: PrismaClient | undefined;
-};
+declare const globalThis: {
+  prisma: PrismaClient;
+} & typeof global;
 
-export const prisma = globalForPrisma.prisma ?? new PrismaClient();
+function getPrismaClient(): PrismaClient {
+  if (!globalThis.prisma) {
+    globalThis.prisma = new PrismaClient();
+  }
+  return globalThis.prisma;
+}
 
-if (process.env.NODE_ENV !== "production") globalForPrisma.prisma = prisma;
+// Proxy defers PrismaClient creation until first property access
+export const prisma = new Proxy({} as PrismaClient, {
+  get(_target, property) {
+    const client = getPrismaClient();
+    return (client as any)[property];
+  },
+});
