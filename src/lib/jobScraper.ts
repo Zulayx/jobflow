@@ -44,13 +44,78 @@ export function isUrl(text: string): boolean {
 // Fetch readable text for a URL through Jina's reader, which renders the page
 // and returns clean markdown — this is what lets us read LinkedIn job pages
 // without an authenticated session.
+// Thrown when the reader is rate-limited or the target blocks us, so callers
+// can show a "try again / paste instead" message rather than feeding the model
+// an error page.
+class ScrapeError extends Error {
+  constructor(message: string, public rateLimited = false) {
+    super(message);
+  }
+}
+
+// Detect when the "content" we got back is actually an error / sign-in / rate
+// limit page rather than a real job posting. Critical: without this we'd hand
+// a "429 Too Many Requests" page to the model, which then "analyzes" the error.
+export function looksLikeErrorPage(text: string): boolean {
+  const t = text.trim();
+  if (t.length < 200) return true; // walls and errors are short
+  const head = t.slice(0, 1000).toLowerCase();
+  const markers = [
+    "http error 429",
+    "error 429",
+    "too many requests",
+    "rate limit",
+    "sign in to continue",
+    "sign in to view",
+    "join linkedin to",
+    "authwall",
+    "this page doesn't exist",
+    "page not found",
+    "404 not found",
+    "access to this page has been denied",
+    "unusual activity",
+    "captcha",
+  ];
+  return markers.some((m) => head.includes(m));
+}
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 async function fetchReadableText(targetUrl: string): Promise<string> {
-  const res = await fetch(`https://r.jina.ai/${targetUrl}`, {
-    headers: { Accept: "text/plain", "X-No-Cache": "true" },
-    signal: AbortSignal.timeout(20000),
-  });
-  if (!res.ok) throw new Error(`Reader fetch failed (${res.status})`);
-  return res.text();
+  const headers: Record<string, string> = { Accept: "text/plain", "X-No-Cache": "true" };
+  // A free Jina API key (https://jina.ai/reader) raises rate limits massively.
+  if (process.env.JINA_API_KEY) headers.Authorization = `Bearer ${process.env.JINA_API_KEY}`;
+
+  let lastStatus = 0;
+  // Retry transient rate limits with backoff before giving up.
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const res = await fetch(`https://r.jina.ai/${targetUrl}`, {
+      headers,
+      signal: AbortSignal.timeout(20000),
+    });
+
+    if (res.ok) {
+      const text = await res.text();
+      if (looksLikeErrorPage(text)) {
+        throw new ScrapeError("The job page blocked automated reading (sign-in or rate limit).", true);
+      }
+      return text;
+    }
+
+    lastStatus = res.status;
+    if (res.status === 429 && attempt < 2) {
+      await sleep(1500 * (attempt + 1)); // 1.5s, then 3s
+      continue;
+    }
+    break;
+  }
+
+  throw new ScrapeError(
+    lastStatus === 429
+      ? "The reader is temporarily rate-limited (HTTP 429)."
+      : `Reader fetch failed (${lastStatus}).`,
+    lastStatus === 429
+  );
 }
 
 // Pull the job-description body out of the readable markdown, dropping the
@@ -87,31 +152,39 @@ export async function resolveJobInput(input: string): Promise<ResolvedJob> {
     const resolvedUrl = jobId
       ? `https://www.linkedin.com/jobs/view/${jobId}`
       : raw;
+    let rateLimited = false;
     try {
       const text = await fetchReadableText(resolvedUrl);
       const description = extractDescription(text);
-      if (description && description.length > 150) {
+      if (description && description.length > 150 && !looksLikeErrorPage(description)) {
         return { text: description, source: "linkedin", jobId: jobId || undefined, resolvedUrl };
       }
-    } catch {
-      // fall through to a clear error below
+    } catch (e) {
+      if (e instanceof ScrapeError && e.rateLimited) rateLimited = true;
     }
     throw new Error(
-      jobId
+      rateLimited
+        ? "LinkedIn is rate-limiting automated reads right now (HTTP 429). Wait a minute and try again, or paste the job description text below for an instant, reliable analysis."
+        : jobId
         ? `Could not read the LinkedIn job posting (id ${jobId}). It may require sign-in or be expired. Open the job on LinkedIn, copy the description text, and paste that instead.`
         : "Could not extract a job id from that LinkedIn link. Paste the job description text instead."
     );
   }
 
   // Generic (non-LinkedIn) job URL.
+  let rateLimited = false;
   try {
     const text = await fetchReadableText(raw);
     const description = extractDescription(text);
-    if (description && description.length > 150) {
+    if (description && description.length > 150 && !looksLikeErrorPage(description)) {
       return { text: description, source: "url", resolvedUrl: raw };
     }
-  } catch {
-    // fall through
+  } catch (e) {
+    if (e instanceof ScrapeError && e.rateLimited) rateLimited = true;
   }
-  throw new Error("Could not read that job URL. Paste the job description text instead.");
+  throw new Error(
+    rateLimited
+      ? "The page is rate-limiting automated reads right now (HTTP 429). Wait a minute and try again, or paste the job description text below."
+      : "Could not read that job URL. Paste the job description text instead."
+  );
 }

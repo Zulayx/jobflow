@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
+import { looksLikeErrorPage } from "@/lib/jobScraper";
 
 export const dynamic = "force-dynamic";
 
@@ -12,17 +13,19 @@ async function scrapeLinkedInJob(jobUrl: string): Promise<{
   jobDescription: string;
 }> {
   const jinaUrl = `https://r.jina.ai/${jobUrl}`;
+  const headers: Record<string, string> = { Accept: "text/plain", "X-No-Cache": "true" };
+  if (process.env.JINA_API_KEY) headers.Authorization = `Bearer ${process.env.JINA_API_KEY}`;
   const response = await fetch(jinaUrl, {
-    headers: {
-      Accept: "text/plain",
-      "X-No-Cache": "true",
-    },
+    headers,
     signal: AbortSignal.timeout(15000),
   });
 
   if (!response.ok) throw new Error("Jina fetch failed");
 
   const text = await response.text();
+
+  // Never store a rate-limit / sign-in wall as if it were a job description.
+  if (looksLikeErrorPage(text)) throw new Error("Page blocked (rate limit or sign-in wall)");
 
   // Extract title — first H1 or "Title: ..." line
   let position = "Job Position";
