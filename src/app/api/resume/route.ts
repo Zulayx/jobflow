@@ -3,6 +3,8 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { writeFile, mkdir } from "fs/promises";
+
+export const dynamic = "force-dynamic";
 import { join } from "path";
 
 export async function GET() {
