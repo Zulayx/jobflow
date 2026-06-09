@@ -17,6 +17,11 @@ export default function SettingsPage() {
   const [opencodeZenKey, setOpencodeZenKey] = useState("");
   const [nvidiaKey, setNvidiaKey] = useState("");
   const [saveSuccess, setSaveSuccess] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  const [isSavingKeys, setIsSavingKeys] = useState(false);
+  const [hasNvidiaKey, setHasNvidiaKey] = useState(false);
+  const [hasOpencodeZenKey, setHasOpencodeZenKey] = useState(false);
+  const [apiKeysUpdatedAt, setApiKeysUpdatedAt] = useState<string | null>(null);
 
   const [linkedinProfile, setLinkedinProfile] = useState("");
   const [linkedinLoading, setLinkedinLoading] = useState(false);
@@ -24,9 +29,8 @@ export default function SettingsPage() {
   const [linkedinError, setLinkedinError] = useState("");
 
   useEffect(() => {
-    setOpencodeZenKey(localStorage.getItem("opencode_zen_key") || "");
-    setNvidiaKey(localStorage.getItem("nvidia_key") || "");
     fetchLinkedinProfile();
+    fetchApiKeyStatus();
   }, []);
 
   const fetchLinkedinProfile = async () => {
@@ -87,11 +91,78 @@ export default function SettingsPage() {
     }
   };
 
-  const handleSaveAPIKeys = () => {
-    localStorage.setItem("opencode_zen_key", opencodeZenKey);
-    localStorage.setItem("nvidia_key", nvidiaKey);
-    setSaveSuccess(true);
-    setTimeout(() => setSaveSuccess(false), 3000);
+  const fetchApiKeyStatus = async () => {
+    try {
+      const res = await fetch("/api/user/profile");
+      if (res.ok) {
+        const data = await res.json();
+        setHasNvidiaKey(data.hasNvidiaKey);
+        setHasOpencodeZenKey(data.hasOpencodeZenKey);
+        setApiKeysUpdatedAt(data.apiKeysUpdatedAt || null);
+      }
+    } catch {
+      console.error("Failed to fetch API key status");
+    }
+  };
+
+  const handleSaveAPIKeys = async () => {
+    if (!nvidiaKey && !opencodeZenKey) return;
+    setIsSavingKeys(true);
+    setSaveError("");
+    setSaveSuccess(false);
+    try {
+      const body: Record<string, string> = {};
+      if (nvidiaKey) body.nvidiaApiKey = nvidiaKey;
+      if (opencodeZenKey) body.opencodeZenApiKey = opencodeZenKey;
+      const res = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHasNvidiaKey(data.hasNvidiaKey);
+        setHasOpencodeZenKey(data.hasOpencodeZenKey);
+        setApiKeysUpdatedAt(data.apiKeysUpdatedAt);
+        setNvidiaKey("");
+        setOpencodeZenKey("");
+        setSaveSuccess(true);
+        setTimeout(() => setSaveSuccess(false), 3000);
+      } else {
+        const data = await res.json();
+        setSaveError(data.error || "Failed to save keys");
+      }
+    } catch {
+      setSaveError("Failed to save keys. Please try again.");
+    } finally {
+      setIsSavingKeys(false);
+    }
+  };
+
+  const handleClearApiKey = async (provider: "nvidia" | "opencode") => {
+    setIsSavingKeys(true);
+    setSaveError("");
+    try {
+      const body = provider === "nvidia" ? { clearNvidiaKey: true } : { clearOpencodeZenKey: true };
+      const res = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        setHasNvidiaKey(data.hasNvidiaKey);
+        setHasOpencodeZenKey(data.hasOpencodeZenKey);
+        setApiKeysUpdatedAt(data.apiKeysUpdatedAt);
+      } else {
+        const data = await res.json();
+        setSaveError(data.error || "Failed to clear key");
+      }
+    } catch {
+      setSaveError("Failed to clear key.");
+    } finally {
+      setIsSavingKeys(false);
+    }
   };
 
   const handleSaveLinkedin = async () => {
@@ -326,47 +397,87 @@ export default function SettingsPage() {
         </div>
 
         <div className="glass-card p-6">
-          <h2 className="text-xl font-semibold mb-6">AI Integration</h2>
+          <div className="flex items-start justify-between mb-2">
+            <h2 className="text-xl font-semibold">AI Integration</h2>
+            {apiKeysUpdatedAt && (
+              <span className="text-xs text-text-tertiary mt-1">
+                Last updated {new Date(apiKeysUpdatedAt).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" })}
+              </span>
+            )}
+          </div>
           <p className="text-text-secondary mb-6">
-            Configure your AI API keys for resume tailoring and cover letter generation.
+            Configure your AI API keys for resume tailoring and cover letter generation. Keys are stored securely on the server.
           </p>
 
-          <div className="space-y-4">
+          <div className="space-y-5">
+            {/* NVIDIA */}
             <div>
-              <label className="block text-sm font-medium mb-2">NVIDIA API Key</label>
+              <label className="block text-sm font-medium mb-1">NVIDIA API Key</label>
               <p className="text-xs text-text-tertiary mb-2">
-                Get your free API key from{" "}
-                <a
-                  href="https://console.nvidia.com/"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-accent-primary hover:underline"
-                >
+                Get your free key from{" "}
+                <a href="https://console.nvidia.com/" target="_blank" rel="noopener noreferrer" className="text-accent-primary hover:underline">
                   NVIDIA GPU Cloud
                 </a>{" "}
-                for Llama 3.1 NIM access
+                for NIM model access
               </p>
-              <input
-                type="password"
-                value={nvidiaKey}
-                onChange={(e) => setNvidiaKey(e.target.value)}
-                className="input-field"
-                placeholder="nvapi-..."
-              />
+              {hasNvidiaKey ? (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-success/10 border border-success/20">
+                  <div className="flex items-center gap-2 text-success text-sm">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    API key configured
+                  </div>
+                  <button
+                    onClick={() => handleClearApiKey("nvidia")}
+                    disabled={isSavingKeys}
+                    className="text-xs text-error hover:underline disabled:opacity-50"
+                  >
+                    Clear key
+                  </button>
+                </div>
+              ) : (
+                <input
+                  type="password"
+                  value={nvidiaKey}
+                  onChange={(e) => setNvidiaKey(e.target.value)}
+                  className="input-field"
+                  placeholder="nvapi-..."
+                />
+              )}
             </div>
 
+            {/* Opencode Zen */}
             <div>
-              <label className="block text-sm font-medium mb-2">Opencode Zen API Key</label>
+              <label className="block text-sm font-medium mb-1">Opencode Zen API Key</label>
               <p className="text-xs text-text-tertiary mb-2">
                 Get your API key from Opencode Zen for GPT-powered features
               </p>
-              <input
-                type="password"
-                value={opencodeZenKey}
-                onChange={(e) => setOpencodeZenKey(e.target.value)}
-                className="input-field"
-                placeholder="sk-..."
-              />
+              {hasOpencodeZenKey ? (
+                <div className="flex items-center justify-between p-3 rounded-xl bg-success/10 border border-success/20">
+                  <div className="flex items-center gap-2 text-success text-sm">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                    API key configured
+                  </div>
+                  <button
+                    onClick={() => handleClearApiKey("opencode")}
+                    disabled={isSavingKeys}
+                    className="text-xs text-error hover:underline disabled:opacity-50"
+                  >
+                    Clear key
+                  </button>
+                </div>
+              ) : (
+                <input
+                  type="password"
+                  value={opencodeZenKey}
+                  onChange={(e) => setOpencodeZenKey(e.target.value)}
+                  className="input-field"
+                  placeholder="sk-..."
+                />
+              )}
             </div>
 
             {saveSuccess && (
@@ -378,9 +489,21 @@ export default function SettingsPage() {
               </div>
             )}
 
-            <button onClick={handleSaveAPIKeys} className="btn-primary w-full">
-              Save API Keys
-            </button>
+            {saveError && (
+              <div className="p-4 rounded-xl bg-error/10 border border-error/20 text-error text-sm">
+                {saveError}
+              </div>
+            )}
+
+            {(!hasNvidiaKey || !hasOpencodeZenKey) && (
+              <button
+                onClick={handleSaveAPIKeys}
+                disabled={isSavingKeys || (!nvidiaKey && !opencodeZenKey)}
+                className="btn-primary w-full disabled:opacity-50"
+              >
+                {isSavingKeys ? "Saving..." : "Save API Keys"}
+              </button>
+            )}
           </div>
         </div>
 

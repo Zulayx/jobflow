@@ -14,9 +14,12 @@ model User {
   name            String?
   linkedinId      String?
   linkedinProfile String?
-  resetToken      String?
-  resetTokenExpiry DateTime?
-  createdAt       DateTime      @default(now())
+  resetToken        String?
+  resetTokenExpiry  DateTime?
+  nvidiaApiKey      String?
+  opencodeZenApiKey String?
+  apiKeysUpdatedAt  DateTime?
+  createdAt         DateTime      @default(now())
   applications    Application[]
   resume          Resume?
 }

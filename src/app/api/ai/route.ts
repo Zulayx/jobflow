@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
 
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
+      select: { id: true, nvidiaApiKey: true, opencodeZenApiKey: true },
     });
 
     if (!user) {
@@ -32,12 +33,13 @@ export async function POST(request: NextRequest) {
     };
 
     const apiKey = provider === "nvidia"
-      ? process.env.NVIDIA_API_KEY
-      : process.env.OPENCODE_ZEN_API_KEY;
+      ? (user.nvidiaApiKey || process.env.NVIDIA_API_KEY)
+      : (user.opencodeZenApiKey || process.env.OPENCODE_ZEN_API_KEY);
 
     if (!apiKey) {
+      const providerName = AI_PROVIDERS[provider as keyof typeof AI_PROVIDERS].name;
       return NextResponse.json(
-        { error: `API key not configured for ${AI_PROVIDERS[provider as keyof typeof AI_PROVIDERS].name}` },
+        { error: `API key not configured for ${providerName}. Go to Settings → AI Integration to add your key.` },
         { status: 400 }
       );
     }
