@@ -117,7 +117,7 @@ export default function AIStudioPage() {
   const [error, setError] = useState("");
   const [resume, setResume] = useState<Resume | null>(null);
   const [provider, setProvider] = useState<"opencodeZen" | "nvidia">("nvidia");
-  const [selectedModel, setSelectedModel] = useState("meta/llama-3.1-8b-instruct");
+  const [selectedModel, setSelectedModel] = useState("nvidia/llama-3.3-nemotron-super-49b-v1");
   const [showModelDropdown, setShowModelDropdown] = useState(false);
   const [applications, setApplications] = useState<Application[]>([]);
   const [selectedApplication, setSelectedApplication] = useState<Application | null>(null);
@@ -130,7 +130,7 @@ export default function AIStudioPage() {
 
   useEffect(() => {
     if (provider === "nvidia") {
-      setSelectedModel("meta/llama-3.1-8b-instruct");
+      setSelectedModel("nvidia/llama-3.3-nemotron-super-49b-v1");
     } else {
       setSelectedModel("gpt-4o-mini");
     }
@@ -556,27 +556,27 @@ export default function AIStudioPage() {
                 <>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
                     <span className="text-lg">🎯</span>
-                    <span>Reasoning & Writing</span>
+                    <span>NVIDIA Nemotron</span>
                   </div>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">🧠</span>
+                    <span className="text-lg">🦙</span>
                     <span>Meta Llama</span>
-                  </div>
-                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">🔬</span>
-                    <span>Google</span>
                   </div>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
                     <span className="text-lg">💻</span>
                     <span>Mistral</span>
                   </div>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">⚡</span>
-                    <span>Microsoft</span>
+                    <span className="text-lg">🔥</span>
+                    <span>DeepSeek</span>
                   </div>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
-                    <span className="text-lg">👁️</span>
-                    <span>Vision Models</span>
+                    <span className="text-lg">🌟</span>
+                    <span>Qwen</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
+                    <span className="text-lg">🔬</span>
+                    <span>Google & Microsoft</span>
                   </div>
                 </>
               ) : (
