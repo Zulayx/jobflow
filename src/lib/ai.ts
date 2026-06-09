@@ -200,8 +200,8 @@ export const NVIDIA_FREE_MODELS: AIModel[] = [
   {
     id: "moonshotai/kimi-k2.6",
     name: "Kimi K2.6",
-    description: "Moonshot AI's frontier model — strong reasoning & long context",
-    strengths: ["Reasoning", "Long Context", "Multilingual", "Analysis"],
+    description: "1T multimodal MoE — long-horizon reasoning, agentic tasks, image/video",
+    strengths: ["Reasoning", "Agentic", "Multimodal", "Long Context"],
     contextLength: "128K",
     icon: "🌙",
     category: "Moonshot AI",
