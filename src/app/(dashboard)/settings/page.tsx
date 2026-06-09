@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useSession } from "next-auth/react";
+import { signOut } from "next-auth/react";
 
 export default function SettingsPage() {
   const { data: session } = useSession();
@@ -156,10 +157,11 @@ export default function SettingsPage() {
               {session?.user?.name?.[0]?.toUpperCase() || session?.user?.email?.[0]?.toUpperCase() || "U"}
             </div>
             <div>
-              <div className="font-semibold text-lg">{session?.user?.name || "User"}</div>
+              <div className="font-semibold text-lg">{session?.user?.name || session?.user?.email?.split("@")[0] || "User"}</div>
               <div className="text-text-secondary">{session?.user?.email}</div>
             </div>
           </div>
+          <ProfileEditForm userName={session?.user?.name} userEmail={session?.user?.email} />
         </div>
 
         <div className="glass-card p-6">
@@ -394,6 +396,93 @@ export default function SettingsPage() {
           </div>
         </div>
       </div>
+    </div>
+  );
+}
+
+function ProfileEditForm({ userName }: { userName?: string | null }) {
+  const [name, setName] = useState(userName || "");
+  const [isEditing, setIsEditing] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [success, setSuccess] = useState(false);
+  const [error, setError] = useState("");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (isEditing && inputRef.current) {
+      inputRef.current.focus();
+    }
+  }, [isEditing]);
+
+  const handleSave = async () => {
+    if (!name.trim()) {
+      setError("Name cannot be empty");
+      return;
+    }
+
+    setIsSaving(true);
+    setError("");
+
+    try {
+      const response = await fetch("/api/user/profile", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name: name.trim() }),
+      });
+
+      if (response.ok) {
+        setSuccess(true);
+        setIsEditing(false);
+        setTimeout(() => setSuccess(false), 3000);
+        window.location.reload();
+      } else {
+        const data = await response.json();
+        setError(data.error || "Failed to update profile");
+      }
+    } catch {
+      setError("Failed to update profile");
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="border-t border-glass-border pt-6 mt-6">
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="font-medium">Display Name</h3>
+        {!isEditing && (
+          <button onClick={() => setIsEditing(true)} className="text-sm text-accent-primary hover:underline">
+            Edit
+          </button>
+        )}
+      </div>
+
+      {isEditing ? (
+        <div className="space-y-3">
+          <input
+            ref={inputRef}
+            type="text"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            className="input-field"
+            placeholder="Enter your name"
+            onKeyDown={(e) => e.key === "Enter" && handleSave()}
+          />
+          {error && <p className="text-error text-sm">{error}</p>}
+          <div className="flex gap-2">
+            <button onClick={handleSave} disabled={isSaving} className="btn-primary text-sm">
+              {isSaving ? "Saving..." : "Save"}
+            </button>
+            <button onClick={() => { setName(userName || ""); setIsEditing(false); }} className="btn-secondary text-sm">
+              Cancel
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p className="text-text-secondary">{name || "No name set"}</p>
+      )}
+
+      {success && <p className="mt-3 text-success text-sm">Profile updated!</p>}
     </div>
   );
 }
