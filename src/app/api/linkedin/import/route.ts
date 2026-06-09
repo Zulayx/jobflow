@@ -5,6 +5,93 @@ import { prisma } from "@/lib/prisma";
 
 export const dynamic = "force-dynamic";
 
+async function scrapeLinkedInJob(jobUrl: string): Promise<{
+  company: string;
+  position: string;
+  location: string;
+  jobDescription: string;
+}> {
+  const jinaUrl = `https://r.jina.ai/${jobUrl}`;
+  const response = await fetch(jinaUrl, {
+    headers: {
+      Accept: "text/plain",
+      "X-No-Cache": "true",
+    },
+    signal: AbortSignal.timeout(15000),
+  });
+
+  if (!response.ok) throw new Error("Jina fetch failed");
+
+  const text = await response.text();
+
+  // Extract title — first H1 or "Title: ..." line
+  let position = "Job Position";
+  const titleMatch = text.match(/^#\s+(.+)$/m) || text.match(/Title:\s*(.+)/i);
+  if (titleMatch) position = titleMatch[1].trim().replace(/\s*\|.*$/, "").trim();
+
+  // Extract company
+  let company = "LinkedIn Job";
+  const companyMatch =
+    text.match(/Company(?:\s+name)?:\s*(.+)/i) ||
+    text.match(/at\s+([A-Z][^\n·|]+?)(?:\s*[·|]|\n)/);
+  if (companyMatch) company = companyMatch[1].trim();
+
+  // Extract location
+  let location = "";
+  const locationMatch = text.match(/Location:\s*(.+)/i);
+  if (locationMatch) location = locationMatch[1].trim();
+
+  // Extract job description block — look for common section headers
+  let jobDescription = "";
+  const descMatch =
+    text.match(/(?:About the (?:job|role)|Job description|Description|Responsibilities|What you.ll do)[:\s]*\n([\s\S]{200,})/i);
+  if (descMatch) {
+    // Take up to ~4000 chars to keep DB size reasonable
+    jobDescription = descMatch[1].slice(0, 4000).trim();
+  } else {
+    // Fallback: strip the header (first ~10 lines) and take the bulk of the text
+    const lines = text.split("\n");
+    const bodyStart = lines.findIndex((l, i) => i > 5 && l.trim().length > 50);
+    if (bodyStart > -1) {
+      jobDescription = lines.slice(bodyStart).join("\n").slice(0, 4000).trim();
+    }
+  }
+
+  return { company, position, location, jobDescription };
+}
+
+function fallbackParseUrl(jobUrl: string) {
+  let company = "LinkedIn Job";
+  let position = "Job Position";
+  let location = "";
+
+  const titleMatch = jobUrl.match(/jobs\/[^/]+\/(\d+)/);
+  if (titleMatch) {
+    const extracted = decodeURIComponent(titleMatch[0])
+      .replace("/jobs/", "")
+      .replace(/\/\d+/, "")
+      .replace(/-/g, " ");
+    if (extracted) {
+      position = extracted
+        .split(" ")
+        .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+        .join(" ");
+    }
+  }
+  const companyMatch = jobUrl.match(/\/company\/([^/?]+)/);
+  if (companyMatch) {
+    company = decodeURIComponent(companyMatch[1])
+      .replace(/-/g, " ")
+      .split(" ")
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(" ");
+  }
+  const locationMatch = jobUrl.match(/location=([^&]+)/);
+  if (locationMatch) location = decodeURIComponent(locationMatch[1]);
+
+  return { company, position, location, jobDescription: "" };
+}
+
 export async function GET(request: NextRequest) {
   try {
     const session = await getServerSession(authOptions);
@@ -22,46 +109,19 @@ export async function GET(request: NextRequest) {
     const user = await prisma.user.findUnique({
       where: { email: session.user.email },
     });
-
     if (!user) {
       return NextResponse.json({ error: "User not found" }, { status: 404 });
     }
 
-    const urlParts = jobUrl.split("/");
-    const jobIdIndex = urlParts.findIndex(part => part === "jobs") + 1;
-    const jobId = jobIdIndex > 0 ? urlParts[jobIdIndex] : null;
-
-    let company = "LinkedIn Job";
-    let position = "Job Position";
-    let location = "";
-
-    const titleMatch = jobUrl.match(/jobs\/[^/]+\/(\d+)/);
-    if (titleMatch) {
-      const extractedTitle = decodeURIComponent(titleMatch[0])
-        .replace("/jobs/", "")
-        .replace(/\/\d+/, "")
-        .replace(/-/g, " ");
-      if (extractedTitle) {
-        position = extractedTitle
-          .split(" ")
-          .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-          .join(" ");
-      }
+    // Try scraping via Jina.ai, fall back to URL parsing if it fails
+    let scraped;
+    try {
+      scraped = await scrapeLinkedInJob(jobUrl);
+    } catch {
+      scraped = fallbackParseUrl(jobUrl);
     }
 
-    const companyMatch = jobUrl.match(/\/company\/([^\/?]+)/);
-    if (companyMatch) {
-      company = decodeURIComponent(companyMatch[1])
-        .replace(/-/g, " ")
-        .split(" ")
-        .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-        .join(" ");
-    }
-
-    const locationMatch = jobUrl.match(/location=([^&]+)/);
-    if (locationMatch) {
-      location = decodeURIComponent(locationMatch[1]);
-    }
+    const { company, position, location, jobDescription } = scraped;
 
     const application = await prisma.application.create({
       data: {
@@ -71,6 +131,7 @@ export async function GET(request: NextRequest) {
         status: "applied",
         jobUrl,
         location: location || "Remote",
+        jobDescription: jobDescription || null,
         timeline: {
           create: {
             status: "applied",
@@ -78,9 +139,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      include: {
-        timeline: true,
-      },
+      include: { timeline: true },
     });
 
     return NextResponse.json({
@@ -89,6 +148,8 @@ export async function GET(request: NextRequest) {
       company: application.company,
       position: application.position,
       location: application.location,
+      jobDescription: application.jobDescription,
+      scraped: !!jobDescription,
     });
   } catch (error) {
     console.error("LinkedIn import error:", error);

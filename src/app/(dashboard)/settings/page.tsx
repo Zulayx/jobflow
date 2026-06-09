@@ -133,7 +133,10 @@ export default function SettingsPage() {
       const response = await fetch(`/api/linkedin/import?url=${encodeURIComponent(jobUrl)}`);
       if (response.ok) {
         const data = await response.json();
-        alert(`Job imported!\n\nCompany: ${data.company}\nPosition: ${data.position}\n\nNote: You can now edit this in Applications.`);
+        const descStatus = data.scraped
+          ? "Job description scraped and saved."
+          : "Job description could not be scraped — paste it manually in AI Studio for best results.";
+        alert(`Job imported!\n\nCompany: ${data.company}\nPosition: ${data.position}\n\n${descStatus}`);
       } else {
         alert("Failed to import job. Please check the URL and try again.");
       }

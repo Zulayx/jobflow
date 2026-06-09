@@ -102,6 +102,7 @@ type Application = {
   company: string;
   position: string;
   jobUrl?: string | null;
+  jobDescription?: string | null;
   notes?: string | null;
 };
 
@@ -163,8 +164,8 @@ export default function AIStudioPage() {
     setSelectedApplication(app);
     setCompanyName(app.company);
     setPosition(app.position);
-    // Pre-fill notes as job description if available
-    if (app.notes) setJobDescription(app.notes);
+    if (app.jobDescription) setJobDescription(app.jobDescription);
+    else if (app.notes) setJobDescription(app.notes);
     setShowAppDropdown(false);
   };
 

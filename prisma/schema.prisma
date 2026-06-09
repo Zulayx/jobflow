@@ -31,8 +31,9 @@ model Application {
   jobUrl    String?
   location  String?
   salary    String?
-  notes     String?
-  tags      String?
+  notes          String?
+  jobDescription String?
+  tags           String?
   createdAt DateTime        @default(now())
   updatedAt DateTime        @updatedAt
   timeline  TimelineEntry[]
