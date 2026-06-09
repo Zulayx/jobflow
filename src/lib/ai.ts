@@ -196,6 +196,16 @@ export const NVIDIA_FREE_MODELS: AIModel[] = [
     icon: "🌟",
     category: "Qwen",
   },
+  // ── Moonshot AI ──────────────────────────────────────────────
+  {
+    id: "moonshotai/kimi-k2.6",
+    name: "Kimi K2.6",
+    description: "Moonshot AI's frontier model — strong reasoning & long context",
+    strengths: ["Reasoning", "Long Context", "Multilingual", "Analysis"],
+    contextLength: "128K",
+    icon: "🌙",
+    category: "Moonshot AI",
+  },
   // ── Google ───────────────────────────────────────────────────
   {
     id: "google/gemma-4-31b-it",

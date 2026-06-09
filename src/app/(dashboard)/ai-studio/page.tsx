@@ -575,6 +575,10 @@ export default function AIStudioPage() {
                     <span>Qwen</span>
                   </div>
                   <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
+                    <span className="text-lg">🌙</span>
+                    <span>Moonshot / Kimi</span>
+                  </div>
+                  <div className="flex items-center gap-2 p-2 rounded-lg bg-white/5">
                     <span className="text-lg">🔬</span>
                     <span>Google & Microsoft</span>
                   </div>
