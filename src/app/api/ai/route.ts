@@ -54,7 +54,21 @@ export async function POST(request: NextRequest) {
     where: { userId: user.id },
   });
 
-  const resumeData = resume?.textContent || "No resume on file. Upload your resume and paste the text content in Settings for AI features.";
+  let resumeData: string;
+  if (resume?.textContent) {
+    resumeData = resume.textContent;
+  } else if (resume?.data) {
+    // Legacy data: could be plain text or base64-encoded binary.
+    // Base64 binary produces garbled output for AI, so detect it:
+    // If data contains mostly printable text with newlines, use it directly.
+    // Otherwise it's likely base64-encoded binary — skip it.
+    const isLikelyBase64Binary = /^[A-Za-z0-9+/=\s]+$/.test(resume.data) && resume.data.length > 500 && !resume.data.includes("\n\n");
+    resumeData = isLikelyBase64Binary
+      ? "Resume file uploaded as PDF/DOCX but text not available for AI. Go to Settings → Resume and paste your resume text in the 'Resume Content' field for AI features to work."
+      : resume.data;
+  } else {
+    resumeData = "No resume on file. Upload your resume in Settings for AI features.";
+  }
 
     // Resolve the job text the model should analyze:
     //  1. Prefer pasted description text.
