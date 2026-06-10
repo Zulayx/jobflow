@@ -22,9 +22,24 @@ export async function GET() {
 
     const resume = await prisma.resume.findUnique({
       where: { userId: user.id },
+      select: {
+        id: true,
+        userId: true,
+        fileName: true,
+        filePath: true,
+        textContent: true,
+        createdAt: true,
+        updatedAt: true,
+      },
     });
 
-    return NextResponse.json(resume || null);
+    if (!resume) return NextResponse.json(null);
+
+    const { textContent, ...rest } = resume;
+    return NextResponse.json({
+      ...rest,
+      hasTextContent: !!textContent,
+    });
   } catch (error) {
     console.error("Get resume error:", error);
     return NextResponse.json({ error: "Failed to fetch resume" }, { status: 500 });
@@ -49,14 +64,16 @@ export async function POST(request: NextRequest) {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
     const textData = formData.get("data") as string | null;
+    const textContent = formData.get("textContent") as string | null;
 
-    if (!file && !textData) {
+    if (!file && !textData && !textContent) {
       return NextResponse.json({ error: "No file or data provided" }, { status: 400 });
     }
 
     let fileName: string | null = null;
     let filePath: string | null = null;
     let resumeData: string | null = textData;
+    let resumeTextContent: string | null = textContent || null;
 
     if (file) {
       const bytes = await file.arrayBuffer();
@@ -73,11 +90,13 @@ export async function POST(request: NextRequest) {
         fileName,
         filePath,
         data: resumeData,
+        textContent: resumeTextContent,
       },
       update: {
         fileName,
         filePath,
         data: resumeData,
+        textContent: resumeTextContent,
       },
     });
 

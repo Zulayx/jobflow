@@ -50,11 +50,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const resume = await prisma.resume.findUnique({
-      where: { userId: user.id },
-    });
+  const resume = await prisma.resume.findUnique({
+    where: { userId: user.id },
+  });
 
-    const resumeData = resume?.data || "No resume on file";
+  const resumeData = resume?.textContent || "No resume on file. Upload your resume and paste the text content in Settings for AI features.";
 
     // Resolve the job text the model should analyze:
     //  1. Prefer pasted description text.

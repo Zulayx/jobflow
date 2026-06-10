@@ -13,6 +13,8 @@ export default function SettingsPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [hasResumeFile, setHasResumeFile] = useState(false);
+  const [resumeFileName, setResumeFileName] = useState<string | null>(null);
 
   const [opencodeZenKey, setOpencodeZenKey] = useState("");
   const [nvidiaKey, setNvidiaKey] = useState("");
@@ -40,6 +42,7 @@ export default function SettingsPage() {
     fetchLinkedinProfile();
     fetchApiKeyStatus();
     fetchGmailStatus();
+    fetchResumeStatus();
 
     // Surface the result of the OAuth round-trip (?gmail=connected|error).
     const params = new URLSearchParams(window.location.search);
@@ -109,6 +112,21 @@ export default function SettingsPage() {
     }
   };
 
+  const fetchResumeStatus = async () => {
+    try {
+      const response = await fetch("/api/resume");
+      if (response.ok) {
+        const data = await response.json();
+        if (data) {
+          setHasResumeFile(!!data.fileName);
+          setResumeFileName(data.fileName);
+        }
+      }
+    } catch (error) {
+      console.error("Failed to fetch resume status:", error);
+    }
+  };
+
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
@@ -122,7 +140,7 @@ export default function SettingsPage() {
   };
 
   const handleUpload = async () => {
-    if (!resumeFile) return;
+    if (!resumeFile && !resumeData) return;
 
     setIsUploading(true);
     setUploadError("");
@@ -130,8 +148,11 @@ export default function SettingsPage() {
 
     try {
       const formData = new FormData();
-      formData.append("file", resumeFile);
-      if (resumeData) formData.append("data", resumeData);
+      if (resumeFile) formData.append("file", resumeFile);
+      if (resumeData) {
+        formData.append("data", resumeData);
+        formData.append("textContent", resumeData);
+      }
 
       const response = await fetch("/api/resume", {
         method: "POST",
@@ -139,9 +160,12 @@ export default function SettingsPage() {
       });
 
       if (response.ok) {
+        const data = await response.json();
         setUploadSuccess(true);
         setResumeFile(null);
         if (fileInputRef.current) fileInputRef.current.value = "";
+        setHasResumeFile(!!data.fileName);
+        setResumeFileName(data.fileName);
       } else {
         const data = await response.json();
         setUploadError(data.error || "Upload failed");
@@ -525,11 +549,11 @@ export default function SettingsPage() {
             </div>
           )}
 
-          <button
-            onClick={handleUpload}
-            disabled={!resumeFile || isUploading}
-            className="btn-primary w-full flex items-center justify-center gap-2"
-          >
+        <button
+          onClick={handleUpload}
+          disabled={(!resumeFile && !resumeData) || isUploading}
+          className="btn-primary w-full flex items-center justify-center gap-2"
+        >
             {isUploading ? (
               <>
                 <svg className="animate-spin w-5 h-5" viewBox="0 0 24 24">
@@ -546,8 +570,20 @@ export default function SettingsPage() {
                 Upload Resume
               </>
             )}
-          </button>
-        </div>
+        </button>
+
+        {hasResumeFile && (
+          <a
+            href="/api/resume/download"
+            className="btn-secondary w-full flex items-center justify-center gap-2 mt-3"
+          >
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            Download {resumeFileName || "Resume"}
+          </a>
+        )}
+      </div>
 
         <div className="glass-card p-6">
           <div className="flex items-start justify-between mb-2">

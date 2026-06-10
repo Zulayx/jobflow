@@ -43,6 +43,7 @@ export interface Resume {
   fileName?: string | null;
   filePath?: string | null;
   data?: string | null;
+  hasTextContent?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
